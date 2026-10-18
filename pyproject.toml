@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jagadish-agent-feedback-loop"
+version = "0.1.0"
+description = "Product-Data-Model flywheel: mine production feedback into golden evals, gate changes on regressions"
+requires-python = ">=3.10"
+
+[tool.hatch.build.targets.wheel]
+packages = ["feedback"]
