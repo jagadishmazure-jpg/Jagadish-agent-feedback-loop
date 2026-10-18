@@ -19,8 +19,21 @@ class FeedbackStore:
         self._sessions: dict[str, str] = {}          # session_id -> user_id
         self._quarantine: dict[str, FeedbackEvent] = {}  # event_id -> event
         self._sessions_path = self.path.with_suffix(self.path.suffix + ".sessions")
+        # Quarantined (orphan) events are persisted too, so a restart cannot drop them.
+        self._quarantine_path = self.path.with_suffix(self.path.suffix + ".quarantine")
         if self._sessions_path.exists():
             self._sessions = json.loads(self._sessions_path.read_text())
+        if self._quarantine_path.exists():
+            for line in self._quarantine_path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    e = FeedbackEvent.from_dict(json.loads(line))
+                    self._quarantine[e.event_id] = e
+
+    def _save_quarantine(self) -> None:
+        self._quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+        self._quarantine_path.write_text(
+            "".join(json.dumps(e.to_dict()) + "\n" for e in self._quarantine.values()),
+            encoding="utf-8")
 
     def _save_sessions(self) -> None:
         self._sessions_path.write_text(json.dumps(self._sessions))
@@ -36,6 +49,7 @@ class FeedbackStore:
         """Store an event. Returns 'stored' or 'quarantined'."""
         if not self.known_session(event.session_id):
             self._quarantine[event.event_id] = event
+            self._save_quarantine()
             return "quarantined"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
@@ -51,9 +65,12 @@ class FeedbackStore:
             raise KeyError(f"no quarantined event {event_id!r}")
         if not self.known_session(session_id):
             raise ValueError(f"session {session_id!r} is not registered")
-        event = self._quarantine.pop(event_id)
+        event = self._quarantine[event_id]
         event.session_id = session_id
-        assert self.append(event) == "stored"
+        if self.append(event) != "stored":  # explicit check: asserts vanish under python -O
+            raise RuntimeError(f"event {event_id!r} could not be stored")
+        del self._quarantine[event_id]
+        self._save_quarantine()
         return event
 
     def _iter_stored(self):

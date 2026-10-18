@@ -28,6 +28,9 @@ class GoldenCase:
     expected: str
     source_event_ids: list[str] = field(default_factory=list)
     case_id: str = ""
+    # True when the corrections in the cluster disagree; a person should pick
+    # the expected answer before the case gates anything.
+    needs_review: bool = False
 
     def __post_init__(self) -> None:
         if not self.case_id:
@@ -115,10 +118,12 @@ class CorrectionMiner:
             rep = max(group, key=lambda e: sum(
                 self.similarity(e.user_query, o.user_query)
                 for o in group if o is not e) if len(group) > 1 else 1.0)
+            answers = {" ".join((e.correction or "").lower().split()) for e in group}
             cases.append(GoldenCase(
                 input=rep.user_query,
                 expected=rep.correction or "",
                 source_event_ids=[e.event_id for e in group],
+                needs_review=len(answers) > 1,
             ))
         return self.deduplicate(cases, existing or [])
 

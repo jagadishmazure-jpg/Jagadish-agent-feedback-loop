@@ -11,7 +11,6 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 
-
 EXPLICIT_TYPES = ("rating", "correction", "thumbs")
 IMPLICIT_TYPES = ("rephrase_detected", "tool_override", "session_abandoned")
 ALL_TYPES = EXPLICIT_TYPES + IMPLICIT_TYPES
@@ -56,7 +55,7 @@ class FeedbackEvent:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "FeedbackEvent":
+    def from_dict(cls, d: dict) -> FeedbackEvent:
         return cls(**d)
 
 

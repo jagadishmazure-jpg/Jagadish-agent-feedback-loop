@@ -9,8 +9,8 @@ on regressions, and the report shows per-case pass/fail with diffs.
 from __future__ import annotations
 
 import difflib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from .miner import GoldenCase
 

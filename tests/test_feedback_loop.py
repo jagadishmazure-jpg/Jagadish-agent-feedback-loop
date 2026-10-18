@@ -24,7 +24,6 @@ from feedback.taxonomy import (
     severity_of,
 )
 
-
 # ---------- helpers ----------
 
 def _correction(eid, query, correction, session="s1"):
@@ -386,3 +385,33 @@ def test_retention_hooks_and_overrides():
     assert retention_days("rating", {"rating": 30}) == 30
     assert kind_of("rephrase_detected") == "implicit"
     assert kind_of("thumbs") == "explicit"
+
+
+def test_quarantine_survives_a_restart(tmp_path):
+    from feedback.capture import capture_thumbs
+    from feedback.store import FeedbackStore
+
+    path = tmp_path / "fb.jsonl"
+    st = FeedbackStore(path)
+    e = capture_thumbs("unknown-sess", "t1", "agent-v1", up=False)
+    assert st.append(e) == "quarantined"
+
+    reopened = FeedbackStore(path)  # new process, same files
+    assert [q.event_id for q in reopened.quarantined()] == [e.event_id]
+    reopened.register_session("sess-9", "user-9")
+    reopened.adopt(e.event_id, "sess-9")
+    assert FeedbackStore(path).quarantined() == []
+    assert FeedbackStore(path).count() == 1
+
+
+def test_conflicting_corrections_flagged_for_review():
+    from feedback.capture import capture_correction
+    from feedback.miner import CorrectionMiner
+
+    agree = [capture_correction("s", f"t{i}", "v1", user_query="refund window for damaged items",
+                                agent_answer="x", correction="30 days") for i in range(2)]
+    clash = agree + [capture_correction("s", "t9", "v1", user_query="refund window for damaged items?",
+                                        agent_answer="x", correction="14 days")]
+    assert CorrectionMiner().mine(agree)[0].needs_review is False
+    (case,) = CorrectionMiner().mine(clash)
+    assert case.needs_review is True and len(case.source_event_ids) == 3
